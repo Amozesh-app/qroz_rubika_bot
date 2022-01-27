@@ -3,7 +3,7 @@ requests
 googletrans==3.1.0a0
 pillow
 arabic-reshaper
-pip install rubika --upgrade
 python-bidi
 mutagen
 gtts
+pip install rubika --upgrade
