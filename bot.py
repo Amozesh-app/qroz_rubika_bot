@@ -1,407 +1,802 @@
-from requests import get
-from re import findall
-from rubika.client import Bot
-from rubika.tools import Tools
-from rubika.encryption import encryption
+import asyncio
+import base64
+import concurrent.futures
+import datetime
+import glob
+import json
+import math
+import os
+import pathlib
+import random
+import sys
 import time
+from json import dumps, loads
+from random import randint
+import re
+from re import findall
+import requests
+import urllib3
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad, unpad
+from requests import post
+from googletrans import Translator
+import io
+from PIL import Image , ImageFont, ImageDraw 
+import arabic_reshaper
+from bidi.algorithm import get_display
+from mutagen.mp3 import MP3
+from gtts import gTTS
+from threading import Thread
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+from difflib import SequenceMatcher
 
+def similar(a, b):
+    return SequenceMatcher(None, a, b).ratio()
+#lisence by bahman ahmadi this classes
+#this classes opened sourse and free
+class encryption:
+    def __init__(self, auth):
+        self.key = bytearray(self.secret(auth), "UTF-8")
+        self.iv = bytearray.fromhex('00000000000000000000000000000000')
 
-bot = Bot("wxhowsospgttjkzekifbuuodgylafvrj")
-target=("g0B2wTh05df91207fc2ebb25ef6ac640")
+    def replaceCharAt(self, e, t, i):
+        return e[0:t] + i + e[t + len(i):]
 
+    def secret(self, e):
+        t = e[0:8]
+        i = e[8:16]
+        n = e[16:24] + t + e[24:32] + i
+        s = 0
+        while s < len(n):
+            e = n[s]
+            if e >= '0' and e <= '9':
+                t = chr((ord(e[0]) - ord('0') + 5) % 10 + ord('0'))
+                n = self.replaceCharAt(n, s, t)
+            else:
+                t = chr((ord(e[0]) - ord('a') + 9) % 26 + ord('a'))
+                n = self.replaceCharAt(n, s, t)
+            s += 1
+        return n
 
-def hasInsult(msg):
-	swData = [False,None]
-	for i in open("dontReadMe.txt").read().split("\n"):
-		if i in msg:
-			swData = [True, i]
-			break
-		else: continue
-	return swData
+    def encrypt(self, text):
+        raw = pad(text.encode('UTF-8'), AES.block_size)
+        aes = AES.new(self.key, AES.MODE_CBC, self.iv)
+        enc = aes.encrypt(raw)
+        result = base64.b64encode(enc).decode('UTF-8')
+        return result
 
-def hasAds(msg):
-	links = list(map(lambda ID: ID.strip()[1:],findall("@[\w|_|\d]+", msg))) + list(map(lambda link:link.split("/")[-1],findall("rubika\.ir/\w+",msg)))
-	joincORjoing = "joing" in msg or "joinc" in msg
+    def decrypt(self, text):
+        aes = AES.new(self.key, AES.MODE_CBC, self.iv)
+        dec = aes.decrypt(base64.urlsafe_b64decode(text.encode('UTF-8')))
+        result = unpad(dec, AES.block_size).decode('UTF-8')
+        return result
 
-	if joincORjoing: return joincORjoing
-	else:
-		for link in links:
-			try:
-				Type = bot.getInfoByUsername(link)["data"]["chat"]["abs_object"]["type"]
-				if Type == "Channel":
-					return True
-			except KeyError: return False
-			
-answered = [bot.getGroupAdmins]
-retries = {}
-sleeped = False
-# Creator = shayan Heydari (snipe4Kill)
-plus= True
-
-while True:
-	try:
-		admins = [i["member_guid"] for i in bot.getGroupAdmins(target)["data"]["in_chat_members"]]
-		min_id = bot.getGroupInfo(target)["data"]["chat"]["last_message_id"]
-		while True:
-			try:
-				messages = bot.getMessages(target,min_id)
-				break
-			except:
-				continue
+class Bot:
+	def __init__(self, auth):
+		self.auth = auth
+		self.enc = encryption(auth)
 		
-		open("id.db","w").write(str(messages[-1].get("message_id")))
-
-		for msg in messages:
-			if msg["type"]=="Text" and not msg.get("message_id") in answered:
-				if not sleeped:
-					if msg.get("text") == "آنلاینی" and msg.get("author_object_guid") in admins :
-						bot.sendMessage(target, "آره عشقم فعالم😉❤", message_id=msg.get("message_id"))
-						
-					elif hasAds(msg.get("text")) and not msg.get("author_object_guid") in admins :
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-						
-					elif "forwarded_from" in msg.keys() and bot.getMessagesInfo(target, [msg.get("message_id")])[0]["forwarded_from"]["type_from"] == "Channel" and not msg.get("author_object_guid") in admins :
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-
-					elif msg.get("text").startswith("add") :
-						bot.invite(target, [bot.getInfoByUsername(msg.get("text").split(" ")[1][1:])["data"]["chat"]["object_guid"]])
-						bot.sendMessage(target, "کاربر مورد نظر افزوده شد!", message_id=msg.get("message_id"))
-
-					elif msg.get("text") == "دستورات":
-						bot.sendMessage(target, "لیسـت دستـــورات ربـات 🤖:\n\n●🤖 (ربات آنلاینی؟) : فعال یا غیر فعال بودن بات\n\n●❎ (پایان) : غیر فعال سازی بات\n\n●✅ (شروع) : فعال سازی بات\n\n●🕘 (ساعت) : ساعت\n\n●📅 (تاریخ میلادی) : تاریخ\n\n●📋 (پاک) : حذف پیام با ریپ بر روی ان\n\n●🔒 (بستن گروه) : بستن چت در گروه\n\n●🔓 (باز کردن گروه) : باز کردن چت در گروه\n\n●❌ (بن) : حذف کاربر با ریپ زدن\n\n●✉ send : ارسال پیام با استفاده از ایدی\n\n●📌 add : افزودن کاربر به گپ با ایدی\n\n●📜 (دستورات) : لیست دستورات ربات\n\n●🆑 cal :ماشین حساب\n\n●🔴 (user) : اطلاعات کاربر با ایدی\n\n●😂 (جوک) : ارسال جوک\n\n●🔵 (فونت) : ارسال فونت\n\n●🔴 (پینگ) : گرفتن پینگ سایت\n\n●🔵 trans : مترجم انگلیسی\n\n●🔴 (زمان) : تاریخ و ساعت\n\n●🔴 (بیوگرافی) : بیوگرافی\n\n●🔴 (پ ن پ) : جوک پ ن پ\n\n●🔴 (الکی مثلا) : جوک الکی مثلا\n\n●🔴 (داستان) : داستان های کوتاه\n\n●🔴 (دانستنی) : دانستنی ها\n\n●🔴 (دیالوگ) : دیالوگ های ماندگار\n\n●🔴 (!weather) : آب و هوا\n\n●🔴 (حدیث) : سخن بزرگان\n\n●🔴 (ذکر) : ذکر روز ها\n\nسازنده @TGGAMES")
-					elif msg.get("text").startswith("cal"):
-						msd = msg.get("text")
-						if plus == True:
-							try:
-								call = [msd.split(" ")[1], msd.split(" ")[2], msd.split(" ")[3]]
-								if call[1] == "+":
-									am = float(call[0]) + float(call[2])
-									bot.sendMessage(target, "حاصل :\n"+"".join(str(am)), message_id=msg.get("message_id"))
-									plus = False
-							
-								elif call[1] == "-":
-									am = float(call[0]) - float(call[2])
-									bot.sendMessage(target, "حاصل :\n"+"".join(str(am)), message_id=msg.get("message_id"))
-							
-								elif call[1] == "*":
-									am = float(call[0]) * float(call[2])
-									bot.sendMessage(target, "حاصل :\n"+"".join(str(am)), message_id=msg.get("message_id"))
-							
-								elif call[1] == "/":
-									am = float(call[0]) / float(call[2])
-									bot.sendMessage(target, "حاصل :\n"+"".join(str(am)), message_id=msg.get("message_id"))
-							except IndexError:
-								bot.sendMessage(target, "دستور رو اشتباه وارد کردی😂🤦‍♂️" ,message_id=msg.get("message_id"))
-						plus= True
-					elif msg.get("text").startswith("send") :
-						bot.sendMessage(bot.getInfoByUsername(msg.get("text").split(" ")[1][1:])["data"]["chat"]["object_guid"], "شما یک پیام ناشناس دارید:\n"+" ".join(msg.get("text").split(" ")[2:]))
-						bot.sendMessage(target, "پیام ناشناستو ارسال کردم😉👌", message_id=msg.get("message_id"))
-
-					elif msg.get("text").startswith("سلام"):
-						bot.sendMessage(target, "هــای😍🌹", message_id=msg.get("message_id"))
-						
-					elif msg.get("text").startswith("صلم"):
-						bot.sendMessage(target, "هــای😍🌹", message_id=msg.get("message_id"))
-						
-					elif msg.get("text").startswith("صلام"):
-						bot.sendMessage(target, "هــای😍🌹", message_id=msg.get("message_id"))
-						
-					elif msg.get("text").startswith("سلم"):
-						bot.sendMessage(target, "هــای😍🌹", message_id=msg.get("message_id"))
-						
-					elif msg.get("text").startswith("سیلام"):
-						bot.sendMessage(target, "هــای😍🌹", message_id=msg.get("message_id"))
-						
-					elif msg.get("text").startswith("صیلام"):
-						bot.sendMessage(target, "هــای😍🌹", message_id=msg.get("message_id"))
-						
-					elif msg.get("text").startswith("خوبی"):
-						bot.sendMessage(target, "تو چطوری؟🤪", message_id=msg.get("message_id"))
-						
-					elif msg.get("text").startswith("چه خبر"):
-						bot.sendMessage(target, "ســلامـتیت😍♥", message_id=msg.get("message_id"))
-						
-					elif msg.get("text") == "چخبر":
-						bot.sendMessage(target, "ســلامـتیت😍♥", message_id=msg.get("message_id"))
-						
-					elif msg.get("text") == "قوانین":
-						name = bot.getGroupInfo(target)["data"]["group"]["group_title"]
-						bot.sendMessage(target, "🌀 قوانین گروه {name} :\n\n⛔️ ارسال لینک ممنوع!\n⛔️ ارسال فحش ممنوع!\n⛔️ توهین به کسی ممنوع!\n⛔️ارسال از کانال (فروارد) ممنوع!", message_id=msg.get("message_id"))
-							
-					elif msg.get("text").startswith("ربات"):
-						bot.sendMessage(target, "جــونـم😁💋", message_id=msg.get("message_id"))
-						
-					elif msg.get("text") == "استغفرالله":
-						bot.sendMessage(target, "توبه توبه", message_id=msg.get("message_id"))
-						
-					elif msg.get("text") == "سبحان الله":
-						bot.sendMessage(target, "😱😂", message_id=msg.get("message_id"))
-						
-					elif msg.get("text") == "😂":
-						bot.sendMessage(target, "😂😂", message_id=msg.get("message_id"))
-						
-					elif msg.get("text") == "😐":
-						bot.sendMessage(target, "من موندم چرا انقدر پوکر میدین!", message_id=msg.get("message_id"))
-						
-					elif msg.get("text").startswith("گاییدم"):
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-						
-					elif msg.get("text").startswith("نگاییدم"):
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-						
-					elif msg.get("text").startswith("kir"):
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-						
-					elif msg.get("text").startswith("کیر"):
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-						
-					elif msg.get("text").startswith("کص"):
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-						
-					elif msg.get("text").startswith("کون"):
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-						
-					elif msg.get("text").startswith("مادرت"):
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-						
-					elif msg.get("text").startswith("مادرتو"):
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-						
-					elif msg.get("text").startswith("کیرم"):
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-						
-					elif msg.get("text").startswith("کوص"):
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-						
-					elif msg.get("text").startswith("کوس"):
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-						
-					elif msg.get("text").startswith("کبص"):
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-						
-					elif msg.get("text").startswith("کوبص"):
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-						
-					elif msg.get("text").startswith("کسکش"):
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-						
-					elif msg.get("text").startswith("بی ناموس"):
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-						
-					elif msg.get("text").startswith("بیناموس"):
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-						
-					elif msg.get("text").startswith("بی ناموص"):
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-						
-					elif msg.get("text").startswith("بیناموص"):
-						bot.deleteMessages(target, [str(msg.get("message_id"))])
-						
-					elif msg.get("text") == "سنجاق" and msg.get("author_object_guid") in admins :
-						    bot.pin(target, msg["reply_to_message_id"])
-						    bot.sendMessage(target, "پیام مورد نظر با موفقیت سنجاق شد!", message_id=msg.get("message_id"))
-						
-					elif msg.get("text") == "برداشتن سنجاق" and msg.get("author_object_guid") in admins :
-						    bot.unpin(target, msg["reply_to_message_id"])
-						    bot.sendMessage(target, "پیام مورد نظر از سنجاق برداشته شد!", message_id=msg.get("message_id"))
-
-					elif msg.get("text") == "پایان" and msg.get("author_object_guid") in admins :
-						sleeped = True
-						bot.sendMessage(target, "ربات با موفقیت خاموش شد!", message_id=msg.get("message_id"))
-
-					elif msg.get("text").startswith("پینگ"):
-						
-						try:
-							responser = get(f"https://api.codebazan.ir/ping/?url={msg.get('text').split()[1]}").text
-							bot.sendMessage(target, responser,message_id=msg["message_id"])
-						except:
-							bot.sendMessage(target, "دستور رو درست وارد کن دیگه😁", message_id=msg["message_id"])
-
-					elif msg.get("text").startswith("!trans"):
-						
-						try:
-							responser = get(f"https://api.codebazan.ir/translate/?type=json&from=en&to=fa&text={msg.get('text').split()[1:]}").json()
-							al = [responser["result"]]
-							bot.sendMessage(msg.get("author_object_guid"), "پاسخ به ترجمه:\n"+"".join(al)).text
-							bot.sendMessage(target, "نتیجه رو برات ارسال کردم😘", message_id=msg["message_id"])
-						except:
-							bot.sendMessage(target, "دستور رو درست وارد کن دیگه😁", message_id=msg["message_id"])
-
-					elif msg.get("text").startswith("فونت"):
-						#print("\n".join(list(response["result"].values())))
-						try:
-							response = get(f"https://api.codebazan.ir/font/?text={msg.get('text').split()[1]}").json()
-							bot.sendMessage(msg.get("author_object_guid"), "\n".join(list(response["result"].values())[:110])).text
-							bot.sendMessage(target, "نتیجه رو برات ارسال کردم😘", message_id=msg["message_id"])
-						except:
-							bot.sendMessage(target, "دستور رو درست وارد کن دیگه😁", message_id=msg["message_id"])
-
-
-
-					elif msg.get("text").startswith("جوک"):
-						
-						try:
-							response = get("https://api.codebazan.ir/jok/").text
-							bot.sendMessage(target, response,message_id=msg.get("message_id"))
-						except:
-							bot.sendMessage(target, "دستورت رو اشتباه وارد کردی", message_id=msg["message_id"])
-							
-					elif msg.get("text").startswith("ذکر"):
-						
-						try:
-							response = get("http://api.codebazan.ir/zekr/").text
-							bot.sendMessage(target, response,message_id=msg.get("message_id"))
-						except:
-							bot.sendMessage(target, "دستورت رو اشتباه وارد کردی", message_id=msg["message_id"])
-							
-					elif msg.get("text").startswith("حدیث"):
-						
-						try:
-							response = get("http://api.codebazan.ir/hadis/").text
-							bot.sendMessage(target, response,message_id=msg.get("message_id"))
-						except:
-							bot.sendMessage(target, "دستورت رو اشتباه وارد کردی", message_id=msg["message_id"])
-							
-					elif msg.get("text").startswith("بیوگرافی"):
-						
-						try:
-							response = get("https://api.codebazan.ir/bio/").text
-							bot.sendMessage(target, response,message_id=msg.get("message_id"))
-						except:
-							bot.sendMessage(target, "دستورت رو اشتباه وارد کردی", message_id=msg["message_id"])
-							
-					elif msg["text"].startswith("!weather"):
-						response = get(f"https://api.codebazan.ir/weather/?city={msg['text'].split()[1]}").json()
-						#print("\n".join(list(response["result"].values())))
-						try:
-							bot.sendMessage(msg["author_object_guid"], "\n".join(list(response["result"].values())[:20])).text
-							bot.sendMessage(target, "نتیجه بزودی برای شما ارسال خواهد شد...", message_id=msg["message_id"])
-						except:
-							bot.sendMessage(target, "متاسفانه نتیجه‌ای موجود نبود!", message_id=msg["message_id"])
-						
-							
-					elif msg.get("text").startswith("دیالوگ"):
-						
-						try:
-							response = get("http://api.codebazan.ir/dialog/").text
-							bot.sendMessage(target, response,message_id=msg.get("message_id"))
-						except:
-							bot.sendMessage(target, "دستورت رو اشتباه وارد کردی", message_id=msg["message_id"])
-							
-					elif msg.get("text").startswith("دانستنی"):
-						
-						try:
-							response = get("http://api.codebazan.ir/danestani/").text
-							bot.sendMessage(target, response,message_id=msg.get("message_id"))
-						except:
-							bot.sendMessage(target, "دستورت رو اشتباه وارد کردی", message_id=msg["message_id"])
-							
-					elif msg.get("text").startswith("داستان"):
-						
-						try:
-							response = get("http://api.codebazan.ir/dastan/").text
-							bot.sendMessage(target, response,message_id=msg.get("message_id"))
-						except:
-							bot.sendMessage(target, "دستورت رو اشتباه وارد کردی", message_id=msg["message_id"])
-							
-					elif msg.get("text").startswith("پ ن پ"):
-						
-						try:
-							response = get("http://api.codebazan.ir/jok/pa-na-pa/").text
-							bot.sendMessage(target, response,message_id=msg.get("message_id"))
-						except:
-							bot.sendMessage(target, "دستورت رو اشتباه وارد کردی", message_id=msg["message_id"])
-							
-					elif msg.get("text").startswith("الکی مثلا"):
-						
-						try:
-							response = get("http://api.codebazan.ir/jok/alaki-masalan/").text
-							bot.sendMessage(target, response,message_id=msg.get("message_id"))
-						except:
-							bot.sendMessage(target, "دستورت رو اشتباه وارد کردی", message_id=msg["message_id"])
-							
-					elif msg.get("text").startswith("زمان"):
-						
-						try:
-							response = get("https://api.codebazan.ir/time-date/?td=all").text
-							bot.sendMessage(target, response,message_id=msg.get("message_id"))
-						except:
-							bot.sendMessage(target, "دستور رو درست وارد کن دیگه😁", message_id=msg["message_id"])
-
-					elif msg.get("text") == "ساعت":
-						bot.sendMessage(target, f"Time : {time.localtime().tm_hour} : {time.localtime().tm_min} : {time.localtime().tm_sec}", message_id=msg.get("message_id"))
-
-					elif msg.get("text") == "تاریخ میلادی":
-						bot.sendMessage(target, f"Date: {time.localtime().tm_year} / {time.localtime().tm_mon} / {time.localtime().tm_mday}", message_id=msg.get("message_id"))
-
-					elif msg.get("text") == "پاک" and msg.get("author_object_guid") in admins :
-						bot.deleteMessages(target, [msg.get("reply_to_message_id")])
-						bot.sendMessage(target, "پیام مورد نظر پاک شد...", message_id=msg.get("message_id"))
-
-
-					elif msg.get("text") == "بستن گروه" and msg.get("author_object_guid") in admins :
-						print(bot.setMembersAccess(target, ["ViewMembers","ViewAdmins","AddMember"]).text)
-						bot.sendMessage(target, "گروه بسته شد!", message_id=msg.get("message_id"))
-
-					elif msg.get("text") == "باز کردن گروه" and msg.get("author_object_guid") in admins :
-						bot.setMembersAccess(target, ["ViewMembers","ViewAdmins","SendMessages","AddMember"])
-						bot.sendMessage(target, "گروه باز شد!", message_id=msg.get("message_id"))
-
-					elif msg.get("text").startswith("بن") and msg.get("author_object_guid") in admins :
-						try:
-							guid = bot.getInfoByUsername(msg.get("text").split(" ")[1][1:])["data"]["chat"]["abs_object"]["object_guid"]
-							user = bot.getUserInfo(data['peer_objects'][0]['object_guid'])["data"]["user"]["first_name"]
-							if not guid in admins :
-								bot.banGroupMember(target, guid)
-								bot.sendMessage(target, f"کاربر مورد نظر بن شد !", message_id=msg.get("message_id"))
-							else :
-								bot.sendMessage(target, f"خطا", message_id=msg.get("message_id"))
-								
-						except IndexError:
-							a = bot.getMessagesInfo(target, [msg.get("reply_to_message_id")])[0]["author_object_guid"]
-							if a in admins:
-								bot.sendMessage(target, f"خطا", message_id=msg.get("message_id"))
-							else:
-								bot.banGroupMember(target, bot.getMessagesInfo(target, [msg.get("reply_to_message_id")])[0]["author_object_guid"])
-								bot.sendMessage(target, f"کاربر مورد نظر بن شد !", message_id=msg.get("message_id"))
-
-				else:
-					if msg.get("text") == "شروع" and msg.get("author_object_guid") in admins :
-						sleeped = False
-						bot.sendMessage(target, "ربات شروع به فعالیت کرد!", message_id=msg.get("message_id"))
-
-			elif msg["type"]=="Event" and not msg.get("message_id") in answered and not sleeped:
-				name = bot.getGroupInfo(target)["data"]["group"]["group_title"]
-				data = msg['event_data']
-				if data["type"]=="RemoveGroupMembers":
-					user = bot.getUserInfo(data['peer_objects'][0]['object_guid'])["data"]["user"]["first_name"]
-					bot.sendMessage(target, f"اگه قوانین رو رعایت میکردی حذف نمیشدی !", message_id=msg["message_id"])
-				
-				elif data["type"]=="AddedGroupMembers":
-					user = bot.getUserInfo(data['peer_objects'][0]['object_guid'])["data"]["user"]["first_name"]
-					bot.sendMessage(target, f"های {user} به گروه {name} خوش اومدی😍❤️\nلطفا قوانین رو رعایت کن👌🙁\n\nکانال ما : @TGGAMES", message_id=msg["message_id"])
-				
-				elif data["type"]=="LeaveGroup":
-					user = bot.getUserInfo(data['performer_object']['object_guid'])["data"]["user"]["first_name"]
-					bot.sendMessage(target, f"موفق باشی 👋", message_id=msg["message_id"])
-					
-				elif data["type"]=="JoinedGroupByLink":
-					user = bot.getUserInfo(data['performer_object']['object_guid'])["data"]["user"]["first_name"]
-					bot.sendMessage(target, f"های {user} به گروه {name} خوش اومدی😍❤️\nلطفا قوانین رو رعایت کن👌🙁\n\nکانال ما : @TGGAMES", message_id=msg["message_id"])
-
-			answered.append(msg.get("message_id"))
-
-	except KeyboardInterrupt:
-		exit()
-
-	except Exception as e:
-		if type(e) in list(retries.keys()):
-			if retries[type(e)] < 3:
-				retries[type(e)] += 1
-				continue
-			else:
-				retries.pop(type(e))
+	def sendMessage(self, chat_id, text, message_id=None):
+		if message_id == None:
+			t = False
+			while t == False:
+				try:
+					p = post(json={"api_version":"5","auth":self.auth,"data_enc":self.enc.encrypt(dumps({
+						"method":"sendMessage",
+						"input":{
+							"object_guid":chat_id,
+							"rnd":f"{randint(100000,900000)}",
+							"text":text,
+							"reply_to_message_id":message_id
+						},
+						"client":{
+							"app_name":"Main",
+							"app_version":"3.2.1",
+							"platform":"Web",
+							"package":"web.rubika.ir",
+							"lang_code":"fa"
+						}
+					}))},url="https://messengerg2c17.iranlms.ir/")
+					p = loads(self.enc.decrypt(p.json()["data_enc"]))
+					t = True
+				except:
+					t = False
+			return p
 		else:
-			retries[type(e)] = 1
-			continue
+			t = False
+			while t == False:
+				try:
+					p = post(json={"api_version":"5","auth":self.auth,"data_enc":self.enc.encrypt(dumps({
+						"method":"sendMessage",
+						"input":{
+							"object_guid":chat_id,
+							"rnd":f"{randint(100000,900000)}",
+							"text":text,
+							"reply_to_message_id":message_id
+						},
+						"client":{
+							"app_name":"Main",
+							"app_version":"3.2.1",
+							"platform":"Web",
+							"package":"web.rubika.ir",
+							"lang_code":"fa"
+						}
+					}))},url="https://messengerg2c17.iranlms.ir/")
+					p = loads(self.enc.decrypt(p.json()["data_enc"]))
+					t = True
+				except:
+					t = False
+			return p
+	
+	def deleteMessages(self, chat_id, message_ids):
+		return post(json={"api_version":"5","auth":self.auth,"data_enc":self.enc.encrypt(dumps({
+			"method":"deleteMessages",
+			"input":{
+				"object_guid":chat_id,
+				"message_ids":message_ids,
+				"type":"Global"
+			},
+			"client":{
+				"app_name":"Main",
+				"app_version":"3.2.1",
+				"platform":"Web",
+				"package":"web.rubika.ir",
+				"lang_code":"fa"
+			}
+		}))},url="https://messengerg2c66.iranlms.ir/")
+
+	def requestFile(self, name, size , mime):
+		o = ''
+		while str(o) != '<Response [200]>':
+			o = post(json={"api_version":"5","auth":self.auth,"data_enc":self.enc.encrypt(dumps({
+				"method":"requestSendFile",
+				"input":{
+					"file_name":name,
+					"size":size,
+					"mime":mime
+				},
+				"client":{
+					"app_name":"Main",
+					"app_version":"3.2.1",
+					"platform":"Web",
+					"package":"web.rubika.ir",
+					"lang_code":"fa"
+				}
+			}))},url="https://messengerg2c66.iranlms.ir/")
+			try:
+				k = loads(self.enc.decrypt(o.json()["data_enc"]))
+				if k['status'] != 'OK' or k['status_det'] != 'OK':
+					o = '502'
+			except:
+				o = '502'
+		return k['data']
+
+	def fileUpload(self, bytef ,hash_send ,file_id ,url):		
+		if len(bytef) <= 131072:
+			h = {
+				'auth':self.auth,
+				'chunk-size':str(len(bytef)),
+				'file-id':str(file_id),
+				'access-hash-send':hash_send,
+				'total-part':str(1),
+				'part-number':str(1)
+			}
+			t = False
+			while t == False:
+				try:
+					j = post(data=bytef,url=url,headers=h).text
+					j = loads(j)['data']['access_hash_rec']
+					t = True
+				except:
+					t = False
+			
+			return j
+		else:
+			t = len(bytef) / 131072
+			t += 1
+			t = random._floor(t)
+			for i in range(1,t+1):
+				if i != t:
+					k = i - 1
+					k = k * 131072
+					t2 = False
+					while t2 == False:
+						try:
+							o = post(data=bytef[k:k + 131072],url=url,headers={
+								'auth':self.auth,
+								'chunk-size':str(131072),
+								'file-id':file_id,
+								'access-hash-send':hash_send,
+								'total-part':str(t),
+								'part-number':str(i)
+							}).text
+							o = loads(o)['data']
+							t2 = True
+						except:
+							t2 = False
+					j = k + 131072
+					j = round(j / 1024)
+					j2 = round(len(bytef) / 1024)
+					print(str(j) + 'kb / ' + str(j2) + ' kb')                
+				else:
+					k = i - 1
+					k = k * 131072
+					t2 = False
+					while t2 == False:
+						try:
+							p = post(data=bytef[k:],url=url,headers={
+								'auth':self.auth,
+								'chunk-size':str(len(bytef[k:])),
+								'file-id':file_id,
+								'access-hash-send':hash_send,
+								'total-part':str(t),
+								'part-number':str(i)
+							}).text
+							p = loads(p)['data']['access_hash_rec']
+							t2 = True
+						except:
+							t2 = False
+					j2 = round(len(bytef) / 1024)
+					print(str(j2) + 'kb / ' + str(j2) + ' kb') 
+					return p
+
+	def sendFile(self, chat_id, file_id , mime , dc_id, access_hash_rec, file_name, size, text=None, message_id=None):
+			if text == None:
+				if message_id == None:
+					t = False
+					while t == False:
+						try:
+							p = loads(self.enc.decrypt(loads(post(json={"api_version":"5","auth":self.auth,"data_enc":self.enc.encrypt(dumps({
+								"method":"sendMessage",
+								"input":{
+									"object_guid":chat_id,
+									"rnd":f"{randint(100000,900000)}",
+									"file_inline":{
+										"dc_id":str(dc_id),
+										"file_id":str(file_id),
+										"type":"File",
+										"file_name":file_name,
+										"size":size,
+										"mime":mime,
+										"access_hash_rec":access_hash_rec
+									}
+								},
+								"client":{
+									"app_name":"Main",
+									"app_version":"3.2.1",
+									"platform":"Web",
+									"package":"web.rubika.ir",
+									"lang_code":"fa"
+								}
+							}))},url="https://messengerg2c17.iranlms.ir/").text)['data_enc']))
+							t = True
+						except:
+							t = False
+					return p
+				else:
+					return loads(self.enc.decrypt(loads(post(json={"api_version":"5","auth":self.auth,"data_enc":self.enc.encrypt(dumps({
+						"method":"sendMessage",
+						"input":{
+							"object_guid":chat_id,
+							"rnd":f"{randint(100000,900000)}",
+							"reply_to_message_id":message_id,
+							"file_inline":{
+								"dc_id":str(dc_id),
+								"file_id":str(file_id),
+								"type":"File",
+								"file_name":file_name,
+								"size":size,
+								"mime":mime,
+								"access_hash_rec":access_hash_rec
+							}
+						},
+						"client":{
+							"app_name":"Main",
+							"app_version":"3.2.1",
+							"platform":"Web",
+							"package":"web.rubika.ir",
+							"lang_code":"fa"
+						}
+					}))},url="https://messengerg2c17.iranlms.ir/").text)['data_enc']))    
+			else:
+				if message_id == None:
+					return loads(self.enc.decrypt(loads(post(json={"api_version":"5","auth":self.auth,"data_enc":self.enc.encrypt(dumps({
+						"method":"sendMessage",
+						"input":{
+							"object_guid":chat_id,
+							"rnd":f"{randint(100000,900000)}",
+							"text":text,
+							"file_inline":{
+								"dc_id":str(dc_id),
+								"file_id":str(file_id),
+								"type":"File",
+								"file_name":file_name,
+								"size":size,
+								"mime":mime,
+								"access_hash_rec":access_hash_rec
+							}
+						},
+						"client":{
+							"app_name":"Main",
+							"app_version":"3.2.1",
+							"platform":"Web",
+							"package":"web.rubika.ir",
+							"lang_code":"fa"
+						}
+					}))},url="https://messengerg2c17.iranlms.ir/").text)['data_enc']))
+				else:
+					return loads(self.enc.decrypt(loads(post(json={"api_version":"5","auth":self.auth,"data_enc":self.enc.encrypt(dumps({
+						"method":"sendMessage",
+						"input":{
+							"object_guid":chat_id,
+							"rnd":f"{randint(100000,900000)}",
+							"text":text,
+							"reply_to_message_id":message_id,
+							"file_inline":{
+								"dc_id":str(dc_id),
+								"file_id":str(file_id),
+								"type":"File",
+								"file_name":file_name,
+								"size":size,
+								"mime":mime,
+								"access_hash_rec":access_hash_rec
+							}
+						},
+						"client":{
+							"app_name":"Main",
+							"app_version":"3.2.1",
+							"platform":"Web",
+							"package":"web.rubika.ir",
+							"lang_code":"fa"
+						}
+					}))},url="https://messengerg2c17.iranlms.ir/").text)['data_enc'])) 
+
+	def sendImage(self, chat_id, file_id , mime , dc_id, access_hash_rec, file_name,  size, thumb_inline , width , height, text=None, message_id=None):
+			if text == None:
+				if message_id == None:
+					t = False
+					while t == False:
+						try:
+							p = loads(self.enc.decrypt(loads(post(json={"api_version":"5","auth":self.auth,"data_enc":self.enc.encrypt(dumps({
+								"method":"sendMessage",
+								"input":{
+									"object_guid":chat_id,
+									"rnd":f"{randint(100000,900000)}",
+									"file_inline":{
+										"dc_id":str(dc_id),
+										"file_id":str(file_id),
+										"type":"Image",
+										"file_name":file_name,
+										"size":size,
+										"mime":mime,
+										"access_hash_rec":access_hash_rec,
+										'thumb_inline':thumb_inline,
+										'width':width,
+										'height':height
+									}
+								},
+								"client":{
+									"app_name":"Main",
+									"app_version":"3.2.1",
+									"platform":"Web",
+									"package":"web.rubika.ir",
+									"lang_code":"fa"
+								}
+							}))},url="https://messengerg2c17.iranlms.ir/").text)['data_enc']))
+							t = True
+						except:
+							t = False
+					return p
+				else:
+					return loads(self.enc.decrypt(loads(post(json={"api_version":"5","auth":self.auth,"data_enc":self.enc.encrypt(dumps({
+						"method":"sendMessage",
+						"input":{
+							"object_guid":chat_id,
+							"rnd":f"{randint(100000,900000)}",
+							"reply_to_message_id":message_id,
+							"file_inline":{
+								"dc_id":str(dc_id),
+								"file_id":str(file_id),
+								"type":"Image",
+								"file_name":file_name,
+								"size":size,
+								"mime":mime,
+								"access_hash_rec":access_hash_rec,
+								'thumb_inline':thumb_inline,
+								'width':width,
+								'height':height
+							}
+						},
+						"client":{
+							"app_name":"Main",
+							"app_version":"3.2.1",
+							"platform":"Web",
+							"package":"web.rubika.ir",
+							"lang_code":"fa"
+						}
+					}))},url="https://messengerg2c17.iranlms.ir/").text)['data_enc']))    
+			else:
+				if message_id == None:
+					return loads(self.enc.decrypt(loads(post(json={"api_version":"5","auth":self.auth,"data_enc":self.enc.encrypt(dumps({
+						"method":"sendMessage",
+						"input":{
+							"object_guid":chat_id,
+							"rnd":f"{randint(100000,900000)}",
+							"text":text,
+							"file_inline":{
+								"dc_id":str(dc_id),
+								"file_id":str(file_id),
+								"type":"Image",
+								"file_name":file_name,
+								"size":size,
+								"mime":mime,
+								"access_hash_rec":access_hash_rec,
+								'thumb_inline':thumb_inline,
+								'width':width,
+								'height':height
+							}
+						},
+						"client":{
+							"app_name":"Main",
+							"app_version":"3.2.1",
+							"platform":"Web",
+							"package":"web.rubika.ir",
+							"lang_code":"fa"
+						}
+					}))},url="https://messengerg2c17.iranlms.ir/").text)['data_enc']))
+				else:
+					return loads(self.enc.decrypt(loads(post(json={"api_version":"5","auth":self.auth,"data_enc":self.enc.encrypt(dumps({
+						"method":"sendMessage",
+						"input":{
+							"object_guid":chat_id,
+							"rnd":f"{randint(100000,900000)}",
+							"text":text,
+							"reply_to_message_id":message_id,
+							"file_inline":{
+								"dc_id":str(dc_id),
+								"file_id":str(file_id),
+								"type":"Image",
+								"file_name":file_name,
+								"size":size,
+								"mime":mime,
+								"access_hash_rec":access_hash_rec,
+								'thumb_inline':thumb_inline,
+								'width':width,
+								'height':height
+							}
+						},
+						"client":{
+							"app_name":"Main",
+							"app_version":"3.2.1",
+							"platform":"Web",
+							"package":"web.rubika.ir",
+							"lang_code":"fa"
+						}
+					}))},url="https://messengerg2c17.iranlms.ir/").text)['data_enc'])) 
+
+	def sendVoice(self, chat_id, file_id , mime , dc_id, access_hash_rec, file_name,  size, duration, text=None, message_id=None):
+			if text == None:
+				if message_id == None:
+					t = False
+					while t == False:
+						try:
+							p = loads(self.enc.decrypt(loads(post(json={"api_version":"5","auth":self.auth,"data_enc":self.enc.encrypt(dumps({
+								"method":"sendMessage",
+								"input":{
+									"object_guid":chat_id,
+									"rnd":f"{randint(100000,900000)}",
+									"file_inline":{
+										"dc_id":str(dc_id),
+										"file_id":str(file_id),
+										"type":"Voice",
+										"file_name":file_name,
+										"size":size,
+										"mime":mime,
+										"access_hash_rec":access_hash_rec,
+										'time':duration,
+									}
+								},
+								"client":{
+									"app_name":"Main",
+									"app_version":"3.2.1",
+									"platform":"Web",
+									"package":"web.rubika.ir",
+									"lang_code":"fa"
+								}
+							}))},url="https://messengerg2c17.iranlms.ir/").text)['data_enc']))
+							t = True
+						except:
+							t = False
+					return p
+				else:
+					return loads(self.enc.decrypt(loads(post(json={"api_version":"5","auth":self.auth,"data_enc":self.enc.encrypt(dumps({
+						"method":"sendMessage",
+						"input":{
+							"object_guid":chat_id,
+							"rnd":f"{randint(100000,900000)}",
+							"reply_to_message_id":message_id,
+							"file_inline":{
+								"dc_id":str(dc_id),
+								"file_id":str(file_id),
+								"type":"Voice",
+								"file_name":file_name,
+								"size":size,
+								"mime":mime,
+								"access_hash_rec":access_hash_rec,
+								'time':duration,
+							}
+						},
+						"client":{
+							"app_name":"Main",
+							"app_version":"3.2.1",
+							"platform":"Web",
+							"package":"web.rubika.ir",
+							"lang_code":"fa"
+						}
+					}))},url="https://messengerg2c17.iranlms.ir/").text)['data_enc']))    
+			else:
+				if message_id == None:
+					return loads(self.enc.decrypt(loads(post(json={"api_version":"5","auth":self.auth,"data_enc":self.enc.encrypt(dumps({
+						"method":"sendMessage",
+						"input":{
+							"object_guid":chat_id,
+							"rnd":f"{randint(100000,900000)}",
+							"text":text,
+							"file_inline":{
+								"dc_id":str(dc_id),
+								"file_id":str(file_id),
+								"type":"Voice",
+								"file_name":file_name,
+								"size":size,
+								"mime":mime,
+								"access_hash_rec":access_hash_rec,
+								'time':duration,
+							}
+						},
+						"client":{
+							"app_name":"Main",
+							"app_version":"3.2.1",
+							"platform":"Web",
+							"package":"web.rubika.ir",
+							"lang_code":"fa"
+						}
+					}))},url="https://messengerg2c17.iranlms.ir/").text)['data_enc']))
+				else:
+					return loads(self.enc.decrypt(loads(post(json={"api_version":"5","auth":self.auth,"data_enc":self.enc.encrypt(dumps({
+						"method":"sendMessage",
+						"input":{
+							"object_guid":chat_id,
+							"rnd":f"{randint(100000,900000)}",
+							"text":text,
+							"reply_to_message_id":message_id,
+							"file_inline":{
+								"dc_id":str(dc_id),
+								"file_id":str(file_id),
+								"type":"Voice",
+								"file_name":file_name,
+								"size":size,
+								"mime":mime,
+								"access_hash_rec":access_hash_rec,
+								'time':duration,
+							}
+						},
+						"client":{
+							"app_name":"Main",
+							"app_version":"3.2.1",
+							"platform":"Web",
+							"package":"web.rubika.ir",
+							"lang_code":"fa"
+						}
+					}))},url="https://messengerg2c17.iranlms.ir/").text)['data_enc'])) 
+
+	def getUserInfo(self, chat_id):
+		return loads(self.enc.decrypt(post(json={"api_version":"5","auth":self.auth,"data_enc":self.enc.encrypt(dumps({
+			"method":"getUserInfo",
+			"input":{
+				"user_guid":chat_id
+			},
+			"client":{
+				"app_name":"Main",
+				"app_version":"3.2.1",
+				"platform":"Web",
+				"package":"web.rubika.ir",
+				"lang_code":"fa"
+			}
+		}))},url="https://messengerg2c37.iranlms.ir/").json()["data_enc"]))
+	
+	def getMessages(self, chat_id,min_id):
+		return loads(self.enc.decrypt(post(json={"api_version":"5","auth": self.auth,"data_enc":self.enc.encrypt(dumps({
+			"method":"getMessagesInterval",
+			"input":{
+				"object_guid":chat_id,
+				"middle_message_id":min_id
+			},
+			"client":{
+				"app_name":"Main",
+				"app_version":"3.2.1",
+				"platform":"Web",
+				"package":"web.rubika.ir",
+				"lang_code":"fa"
+			}
+		}))},url="https://messengerg2c67.iranlms.ir/").json().get("data_enc"))).get("data").get("messages")
+		
+	def getInfoByUsername(self, username):
+		''' username should be without @ '''
+		return loads(self.enc.decrypt(post(json={"api_version":"5","auth": self.auth,"data_enc":self.enc.encrypt(dumps({
+			"method":"getObjectByUsername",
+			"input":{
+				"username":username
+			},
+			"client":{
+				"app_name":"Main",
+				"app_version":"3.2.1",
+				"platform":"Web",
+				"package":"web.rubika.ir",
+				"lang_code":"fa"
+			}
+		}))},url="https://messengerg2c23.iranlms.ir/").json().get("data_enc")))
+
+	def banGroupMember(self, chat_id, user_id):
+		return post(json={"api_version":"5","auth": self.auth,"data_enc":self.enc.encrypt(dumps({
+			"method":"banGroupMember",
+			"input":{
+				"group_guid": chat_id,
+				"member_guid": user_id,
+				"action":"Set"
+			},
+			"client":{
+				"app_name":"Main",
+				"app_version":"3.2.1",
+				"platform":"Web",
+				"package":"web.rubika.ir",
+				"lang_code":"fa"
+			}
+		}))},url="https://messengerg2c21.iranlms.ir/")
+
+	def invite(self, chat_id, user_ids):
+		return post(json={"api_version":"5","auth": self.auth,"data_enc":self.enc.encrypt(dumps({
+			"method":"addGroupMembers",
+			"input":{
+				"group_guid": chat_id,
+				"member_guids": user_ids
+			},
+			"client":{
+				"app_name":"Main",
+				"app_version":"3.2.1",
+				"platform":"Web",
+				"package":"web.rubika.ir",
+				"lang_code":"fa"
+			}
+		}))},url="https://messengerg2c22.iranlms.ir/")
+	
+	def getGroupAdmins(self, chat_id):
+		t = False
+		while t == False:
+			try:
+				p = post(json={"api_version":"5","auth": self.auth,"data_enc":self.enc.encrypt(dumps({
+					"client":{
+						"app_name":"Main",
+						"app_version":"2.9.5",
+						"lang_code":"fa",
+						"package":"ir.resaneh1.iptv",
+						"platform":"Android"
+					},
+					"input":{
+						"group_guid":chat_id
+					},
+					"method":"getGroupAdminMembers"
+				}))},url="https://messengerg2c22.iranlms.ir/")
+				p = loads(self.enc.decrypt(p.json().get("data_enc")))
+				t = True
+			except:
+				t = False
+		return p
+
+	def getMessagesInfo(self, chat_id, message_ids):
+		return loads(self.enc.decrypt(post(json={"api_version":"5","auth": self.auth,"data_enc":self.enc.encrypt(dumps({
+			"method":"getMessagesByID",
+			"input":{
+				"object_guid": chat_id,
+				"message_ids": message_ids
+			},
+			"client":{
+				"app_name":"Main",
+				"app_version":"3.2.1",
+				"platform":"Web",
+				"package":"web.rubika.ir",
+				"lang_code":"fa"
+			}
+		}))}, url="https://messengerg2c24.iranlms.ir/").json()["data_enc"])).get("data").get("messages")
+
+	def setMembersAccess(self, chat_id, access_list):
+		return post(json={
+			"api_version": "4",
+			"auth": self.auth,
+			"client": {
+				"app_name": "Main",
+				"app_version": "2.9.5",
+				"lang_code": "fa",
+				"package": "ir.resaneh1.iptv",
+				"platform": "Android"
+			},
+			"data_enc": self.enc.encrypt(dumps({
+				"access_list": access_list,
+				"group_guid": chat_id
+			})),
+			"method": "setGroupDefaultAccess"
+		}, url="https://messengerg2c24.iranlms.ir/")
+
+	def getGroupInfo(self, chat_id):
+		return loads(self.enc.decrypt(post(
+			json={
+				"api_version":"5",
+				"auth": self.auth,
+				"data_enc": self.enc.encrypt(dumps({
+					"method":"getGroupInfo",
+					"input":{
+						"group_guid": chat_id,
+					},
+					"client":{
+						"app_name":"Main",
+						"app_version":"3.2.1",
+						"platform":"Web",
+						"package":"web.rubika.ir",
+						"lang_code":"fa"
+					}
+			}))}, url="https://messengerg2c24.iranlms.ir/").json()["data_enc"]))
+	
+	def get_updates_all_chats(self):
+		t = False
+		while t == False:
+			try:
+				time_stamp = str(random._floor(datetime.datetime.today().timestamp()) - 200)
+				p = post(json={"api_version":"5","auth": self.auth,"data_enc":self.enc.encrypt(dumps({
+					"method":"getChatsUpdates",
+					"input":{
+						"state":time_stamp,
+					},
+					"client":{
+						"app_name":"Main",
+						"app_version":"3.2.1",
+						"platform":"Web",
+						"package":"web.rubika.ir",
+						"lang_code":"fa"
+					}
+				}))},url="https://messengerg2c67.iranlms.ir/")
+				p = loads(self.enc.decrypt(p.json().get("data_enc"))).get("data").get("chats")
+				t = True
+			except:
+				t = False
+		return p
+
+	def get_updates_chat(self, chat_id):
+		time_stamp = str(random._floor(datetime.datetime.today().timestamp()) - 200)
+		return loads(self.enc.decrypt(post(json={"api_version":"5","auth": self.auth,"data_enc":self.enc.encrypt(dumps({
+			"method":"getMessagesUpdates",
+			"input":{
+				"object_guid":chat_id,
+				"state":time_stamp
+			},
+			"client":{
+				"app_name":"Main",
+				"app_version":"3.2.1",
+				"platform":"Web",
+				"package":"web.rubika.ir",
+				"lang_code":"fa"
+			}
+		}))},url="https://messengerg2c67.iranlms.ir/").json().get("data_enc"))).get("data").get("updated_messages")
+	
+	def my_sticker_set(self):
+		time_stamp = str(random._floor(datetime.datetime.today().timestamp()) - 200)
+		return loads(self.enc.decrypt(post(json={"api_version":"5","auth": self.auth,"data_enc":self.enc.encrypt(dumps({
+			"method":"getMyStickerSets",
+			"input":{},
+			"client":{
+				"app_name":"Main",
+				"app_version":"3.2.1",
+				"platform":"Web",
+				"package":"web.rubika.ir",
+				"lang_code":"fa"
+			}
+		}))},url="https://messengerg2c67.iranlms.ir/").json().get("data_enc"))).get("data")
