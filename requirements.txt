@@ -6,4 +6,3 @@ arabic-reshaper
 python-bidi
 mutagen
 gtts
-pip install rubika --upgrade
