@@ -6,3 +6,10 @@ arabic-reshaper
 python-bidi
 mutagen
 gtts
+requests --upgrade
+pycryptodome==3.10.1
+pillow --upgrade
+arabic-reshaper --upgrade
+python-bidi --upgrade
+mutagen --upgrade
+gtts --upgrade
